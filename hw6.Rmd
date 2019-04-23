@@ -1,0 +1,120 @@
+---
+title: 'Homework #6'
+author: "Blake Inderski"
+date: "4/16/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library("dplyr")
+library("tidyr")
+library("tidyverse")
+library("ggplot2")
+library("readxl")
+library("ggrepel")
+library("RColorBrewer")
+```
+
+## Top dogs
+
+In this homework, you will try to reproduce the fantastic infographic for [top dogs](https://informationisbeautiful.net/visualizations/best-in-show-whats-the-top-data-dog/), originally produced by David McCandless. The raw data can be found [here](https://docs.google.com/spreadsheets/d/1l_HfF5EaN-QgnLc2UYdCc7L2CVrk0p3VdGB1godOyhk/edit#gid=10). You can download this file by File -- Download As -- Microsoft Excel (.xlsx).
+
+**Submission instructions**: Create a folder named `ds202_hw6`, and name the RMarkDown file including your solutions `hw6.Rmd` under this folder. For the submission, create a GitHub repository named `ds202_hw6` under your GitHub account, and push both `hw6.Rmd` and the knitted `hw6.html` before the deadline. I will assume you use the same GitHub username as for your HW5 submission. The latest version of your homework appearing on GitHub before the deadline is graded. *It is crucial to follow the exact folder structure and file names*, so that your homework can be reproduced and graded by an automated script. This homework is **due on April 25** before class.
+
+1. Import the data and clean appropriately. To read in the data, you can use `readxl::read_xlsx('fileNameHere', sheet='sheetNameHere')`. Required data are in the sheets `Best in show` and `Best in show full sheet`. Take extra care on the column names and the first few rows of the data frame after read in.
+
+```{r}
+#data1 <- readxl::read_xlsx("KIB\ -\ Best\ in\ Show\ (public).xlsx", sheet="Best in show")
+data2 <- readxl::read_xlsx("KIB\ -\ Best\ in\ Show\ (public).xlsx", sheet="Best in show full sheet")
+
+data2 <- data2[,colSums(is.na(data2))<nrow(data2)]
+data2 <- data2 %>% select(1, 2, 3, 5, 9, 27)
+data2 <- data2[-c(1, 2, 3), ]
+colnames(data2) <- c("breed", "type", "score", "popularity", "intelligence_raw", "size")
+data2$score <- as.numeric(data2$score)
+data2$popularity <- as.numeric(data2$popularity)
+data2$intelligence_raw <- as.numeric(data2$intelligence_raw)
+data2$type <- as.factor(data2$type)
+#levels(data2$type) #correct level order
+data2$size <- as.factor(data2$size)
+#levels(data2$size) #levels need to be reversed
+data2$size <- fct_rev(data2$size)
+
+data2 <- data2 %>% mutate(intelligence = ifelse(intelligence_raw >= 0.5, "clever", "dumb"))
+data2$intelligence <- as.factor(data2$intelligence)
+#levels(data2$intelligence) #levels need to be reversed
+data2$intelligence <- fct_rev(data2$intelligence)
+
+data2 <- data2 %>% drop_na()
+
+head(data2)
+```
+
+2. Create a graphics similar to the  [top dogs](https://informationisbeautiful.net/visualizations/best-in-show-whats-the-top-data-dog/) figure. Your figure need to display the following information with appropriate plotting elements:
+
+- breed of dog
+- type of dog (work, toy, etc.)
+- size of dog
+- data score 
+- popularity
+- intelligence of the dog
+- appropriate legends & explanation
+
+Hints and Notes:
+
+- The breed of dog can be displayed without the silhouttes (text only is fine)
+- Avoid (too much) overlap!
+- Choose a good color scheme.
+- Your submission is supposed to be fully reproducible, i.e. the TA and I will 'knit' your submission in RStudio.
+
+```{r}
+min_score <- min(as.vector(data2$score), na.rm=TRUE)
+max_score <- max(as.vector(data2$score), na.rm=TRUE)
+score_range <- max_score-min_score
+score_middle <- score_range/2 + min_score
+min_popularity <- -max(as.vector(data2$popularity), na.rm=TRUE)
+max_popularity <- -min(as.vector(data2$popularity), na.rm=TRUE)
+popularity_range <- max_popularity-min_popularity
+popularity_middle <- popularity_range/2 + min_popularity
+#size_convert = c("small" = 1, "medium" = 2, "large" = 3)
+
+plot <- ggplot(data2, aes(x=score, y=-popularity, label=breed)) + 
+  geom_point(alpha = 0.8, aes(shape=intelligence, color=type, size=size)) +
+  #size=size_convert[size])) +
+  labs(title = "Best in Show: The Ultimate Data Dog", x = "our data score", y = "popularity") +
+  coord_cartesian(xlim=c(min_score-score_range*0.01, max_score+score_range*0.01),
+                  ylim=c(min_popularity-popularity_range*0.03, max_popularity+popularity_range*0.03)) +
+  geom_vline(xintercept = score_middle, size=0.5) +
+  geom_hline(yintercept = popularity_middle, size=0.5) +
+  theme(axis.ticks.x=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        plot.title = element_text(lineheight=.8, face="bold")) +
+  #https://cran.r-project.org/web/packages/ggrepel/vignettes/ggrepel.html
+  geom_text_repel(aes(color=type), size = 1) +
+  #scale_size_continuous(range = c(1, 3))
+  scale_size_discrete(breaks=levels(data2$size)) +
+  annotate("text", x=min_score-score_range*0.05, 
+           y=min_popularity-popularity_range*0.05, label="The Rightly Ignored", hjust=0) +
+  annotate("text", x=max_score+score_range*0.05, 
+           y=max_popularity+popularity_range*0.05, label="Hot Dogs!", hjust=1) +
+  annotate("text", x=min_score-score_range*0.05, 
+           y=max_popularity+popularity_range*0.05, label="Inexplicably Overrated", hjust=0) +
+  annotate("text", x=max_score+score_range*0.05, 
+           y=min_popularity-popularity_range*0.05, label="Overlooked Treasures", hjust=1) +
+  guides(shape = guide_legend(order = 1),
+         size = guide_legend(order = 2),
+         color = guide_legend(order = 3)) +
+  scale_color_brewer(palette="Dark2")
+plot
+
+```
